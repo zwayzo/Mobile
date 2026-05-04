@@ -28,39 +28,49 @@ class WeatherService {
 
   // 2. Get weather using lat/lon
   Future<Map<String, dynamic>?> getWeather(double lat, double lon) async {
-    final url =
-        'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current_weather=true';
+  final url =
+      'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon'
+      '&current_weather=true'
+      '&hourly=temperature_2m,windspeed_10m,weathercode'
+      '&daily=temperature_2m_max,temperature_2m_min,weathercode'
+      '&timezone=auto';
 
-    final response = await http.get(Uri.parse(url));
+  final response = await http.get(Uri.parse(url));
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final currentWeather = data["current_weather"];
-      print("data in getWeather: $currentWeather");
-      return currentWeather;
-    }
-
-    return null;
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    return data; // ✅ return the full object, not just current_weather
   }
 
-  // 3. MAIN FUNCTION (what UI will call)
-  // Future<List<String>> fetchWeather(String city) async {
-  //   print("Fetching weather for city: $city");
-  //   final coords = await getCoordinates(city);
+  return null;
+}
+Future<Map<String, String>?> getCityFromCoordinates(double lat, double lon) async {
+  final url =
+      'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=json';
 
-  //   if (coords == null) return null;
+  final response = await http.get(
+    Uri.parse(url),
+    headers: {"User-Agent": "weather_app"},
+  );
 
-  //   final weather = await getWeather(
-    
-  //     coords["latitude"]!,
-  //     coords["longitude"]!,
-  //   );
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    final address = data["address"];
 
-  //   return weather;
-  // }
+    return {
+      "name": (address["city"] ?? address["town"] ?? address["village"] ?? "").toString(),
+      "region": (address["state"] ?? "").toString(),
+      "country": (address["country"] ?? "").toString(),
+    };
+  }
+
+  return null;
+}
+
+
 }
 Future<List<Map<String, String>>> fetchSuggestions(String query) async {
-  print("Fetching suggestions for query: $query");
+  // print("Fetching suggestions for query: $query");
 
   final url =
       'https://geocoding-api.open-meteo.com/v1/search?name=$query&count=5';
@@ -88,11 +98,19 @@ Future<List<Map<String, String>>> fetchSuggestions(String query) async {
         });
       }
     }
+  
+    // print("suggestions: $suggestions");
 
-    print("suggestions: $suggestions");
     return suggestions;
   } catch (e) {
     print("Error fetching suggestions: $e");
     return [];
   }
+
+
+
+
+
+  
 }
+
