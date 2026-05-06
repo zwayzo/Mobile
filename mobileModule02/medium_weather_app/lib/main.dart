@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:device_preview/device_preview.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    DevicePreview(
+      enabled: true,
+      builder: (context) => const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -13,6 +19,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Weather App',
+
+      builder: DevicePreview.appBuilder,
+      locale: DevicePreview.locale(context),
+
       home: const MyHomePage(),
     );
   }
@@ -66,14 +76,11 @@ class _MyHomePageState extends State<MyHomePage> {
 
       if (permission == LocationPermission.deniedForever ||
           permission == LocationPermission.denied) {
-        print("Permission denied");
-
         setState(() {
           _isGeoMode = true;
           latitude = null;
           longitude = null;
         });
-
         return;
       }
 
@@ -84,12 +91,7 @@ class _MyHomePageState extends State<MyHomePage> {
         latitude = position.latitude;
         longitude = position.longitude;
       });
-
-      print("Location: $latitude, $longitude");
-
     } catch (e) {
-      print("Error: $e");
-
       setState(() {
         _isGeoMode = true;
         latitude = null;
@@ -99,9 +101,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    setState(() => _selectedIndex = index);
 
     _pageController.animateToPage(
       index,
@@ -111,15 +111,37 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _handlePageChange(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    setState(() => _selectedIndex = index);
+  }
+
+  Widget buildTab(String title, double width) {
+    final fontSize = width * 0.08;
+    final padding = width * 0.05;
+
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(padding),
+        child: Text(
+          buildString(title),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final width = size.width;
+
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: size.height * 0.08,
+        backgroundColor: Colors.blueGrey,
         title: TextField(
           controller: _cityController,
           style: const TextStyle(color: Colors.white),
@@ -142,26 +164,34 @@ class _MyHomePageState extends State<MyHomePage> {
             icon: const Icon(Icons.location_on, color: Colors.white),
           ),
         ],
-        backgroundColor: Colors.blueGrey,
       ),
 
-      body: PageView(
-        controller: _pageController,
-        onPageChanged: _handlePageChange,
-        children: [
-          Center(child: Text(buildString("Currently"), style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold))),
-          Center(child: Text(buildString("Today"), style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold))),
-          Center(child: Text(buildString("Weekly"), style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold))),
-        ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+
+          return PageView(
+            controller: _pageController,
+            onPageChanged: _handlePageChange,
+            children: [
+              buildTab("Currently", width),
+              buildTab("Today", width),
+              buildTab("Weekly", width),
+            ],
+          );
+        },
       ),
 
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.access_time), label: 'Currently'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Today'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Weekly'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.access_time), label: 'Currently'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_today), label: 'Today'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_month), label: 'Weekly'),
         ],
       ),
     );

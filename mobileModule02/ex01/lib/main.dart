@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:device_preview/device_preview.dart';
 import 'api.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    DevicePreview(
+      enabled: true,
+      builder: (context) => const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -12,6 +18,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      useInheritedMediaQuery: true,
+      locale: DevicePreview.locale(context),
+      builder: DevicePreview.appBuilder,
       debugShowCheckedModeBanner: false,
       title: 'Weather App',
       home: const MyHomePage(),
@@ -45,9 +54,8 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
 
-    // 👇 THIS is what you were missing
     Future.delayed(Duration.zero, () {
-      getLocation(); // ask permission when app starts
+      getLocation();
     });
   }
 
@@ -58,7 +66,6 @@ class _MyHomePageState extends State<MyHomePage> {
     super.dispose();
   }
 
-  // ================= GEOLOCATION =================
 
   Future<void> getLocation() async {
     try {
@@ -85,11 +92,7 @@ class _MyHomePageState extends State<MyHomePage> {
         latitude = position.latitude;
         longitude = position.longitude;
       });
-
-      print("Location: $latitude, $longitude");
     } catch (e) {
-      print("Error: $e");
-
       setState(() {
         _isGeoMode = true;
         latitude = null;
@@ -98,7 +101,6 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  // ================= SUGGESTIONS =================
 
   Future<void> getSuggestions(String query) async {
     if (query.isEmpty) {
@@ -119,7 +121,6 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  // ================= UI =================
 
   String buildString(String tab) {
     if (_isGeoMode && latitude != null && longitude != null) {
@@ -142,8 +143,29 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() => _selectedIndex = index);
   }
 
+
+  double responsiveFont(BuildContext context, double size) {
+    final width = MediaQuery.of(context).size.width;
+
+    if (width < 350) return size * 0.8; // small phone
+    if (width < 600) return size;       // normal phone
+    return size * 1.4;                  // tablet
+  }
+
+  EdgeInsets responsivePadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+
+    if (width < 350) return const EdgeInsets.all(8);
+    if (width < 600) return const EdgeInsets.all(16);
+    return const EdgeInsets.all(32);
+  }
+
+  // ================= UI =================
+
   @override
   Widget build(BuildContext context) {
+    final fontSize = responsiveFont(context, 24);
+
     return Scaffold(
       appBar: AppBar(
         title: TextField(
@@ -171,12 +193,11 @@ class _MyHomePageState extends State<MyHomePage> {
 
       body: Column(
         children: [
-          if (isSearching)
-            const LinearProgressIndicator(),
+          if (isSearching) const LinearProgressIndicator(),
 
           if (suggestions.isNotEmpty)
             SizedBox(
-              height: 200,
+              height: MediaQuery.of(context).size.height * 0.25,
               child: ListView.builder(
                 itemCount: suggestions.length,
                 itemBuilder: (context, index) {
@@ -204,9 +225,45 @@ class _MyHomePageState extends State<MyHomePage> {
               controller: _pageController,
               onPageChanged: _handlePageChange,
               children: [
-                Center(child: Text(buildString("Currently"), style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold))),
-                Center(child: Text(buildString("Today") , style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold))),
-                Center(child: Text(buildString("Weekly"), style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold))),
+                Center(
+                  child: Padding(
+                    padding: responsivePadding(context),
+                    child: Text(
+                      buildString("Currently"),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                Center(
+                  child: Padding(
+                    padding: responsivePadding(context),
+                    child: Text(
+                      buildString("Today"),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                Center(
+                  child: Padding(
+                    padding: responsivePadding(context),
+                    child: Text(
+                      buildString("Weekly"),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

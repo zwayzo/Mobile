@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:device_preview/device_preview.dart';
 import 'api.dart';
 import 'package:geolocator/geolocator.dart';
 
-
 void main() {
-  runApp(const MyApp());
+  runApp(
+    DevicePreview(
+      enabled: true,
+      builder: (context) => const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -12,11 +17,21 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
+      useInheritedMediaQuery: true,
+      locale: DevicePreview.locale(context),
+      builder: DevicePreview.appBuilder,
       debugShowCheckedModeBanner: false,
-      home: MyHomePage(),
+      home: const MyHomePage(),
     );
   }
+}
+
+String _getDayName(DateTime date) {
+  const days = [
+    "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
+  ];
+  return days[date.weekday - 1];
 }
 
 class MyHomePage extends StatefulWidget {
@@ -24,10 +39,6 @@ class MyHomePage extends StatefulWidget {
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
-}
-String _getDayName(DateTime date) {
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  return days[date.weekday - 1];
 }
 
 class _MyHomePageState extends State<MyHomePage> {
@@ -37,11 +48,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   String _locationName = "";
   String _region = "";
-  String _city = "";
-  bool _isGeoMode = false;
   String _country = "";
-  double? latitude;
-  double? longitude;
 
   List<Map<String, String>> suggestions = [];
   bool isSearching = false;
@@ -49,15 +56,28 @@ class _MyHomePageState extends State<MyHomePage> {
 
   final PageController _pageController = PageController();
   final TextEditingController _cityController = TextEditingController();
+
+
+  double rf(double size) {
+    final w = MediaQuery.of(context).size.width;
+    if (w < 350) return size * 0.8;
+    if (w < 600) return size;
+    return size * 1.3;
+  }
+
+  EdgeInsets rp() {
+    final w = MediaQuery.of(context).size.width;
+    if (w < 350) return const EdgeInsets.all(8);
+    if (w < 600) return const EdgeInsets.all(16);
+    return const EdgeInsets.all(24);
+  }
+
   @override
   void initState() {
     super.initState();
-
-    // 👇 THIS is what you were missing
-    Future.delayed(Duration.zero, () {
-      getLocation(); // ask permission when app starts
-    });
+    Future.delayed(Duration.zero, () => getLocation());
   }
+
   @override
   void dispose() {
     _pageController.dispose();
@@ -66,53 +86,37 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
 
-    Future<void> getLocation() async {
-  try {
-    LocationPermission permission = await Geolocator.checkPermission();
+  Future<void> getLocation() async {
+    try {
+      var permission = await Geolocator.checkPermission();
 
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) return;
-
-    setState(() => isLoadingWeather = true);
-
-    final position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.medium,
-    );
-
-    // Get city name from coordinates
-    final cityData = await WeatherService().getCityFromCoordinates(
-      position.latitude,
-      position.longitude,
-    );
-
-    // Fetch weather
-    final weather = await WeatherService().getWeather(
-      position.latitude,
-      position.longitude,
-    );
-
-    setState(() {
-      isLoadingWeather = false;
-      if (weather != null) {
-        _currentWeather = weather;
-        _locationName = cityData?["name"] ?? "";
-        _region = cityData?["region"] ?? "";
-        _country = cityData?["country"] ?? "";
-        _cityController.text = _locationName;
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
       }
-    });
 
-  } catch (e) {
-    print("Error: $e");
-    setState(() => isLoadingWeather = false);
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) return;
+
+      setState(() => isLoadingWeather = true);
+
+      final position = await Geolocator.getCurrentPosition();
+
+      final weather = await WeatherService().getWeather(
+        position.latitude,
+        position.longitude,
+      );
+
+      setState(() {
+        isLoadingWeather = false;
+        _currentWeather = weather;
+        _locationName = "My Location";
+      });
+
+    } catch (e) {
+      setState(() => isLoadingWeather = false);
+    }
   }
-}
 
-  // ---------------- WEATHER API ----------------
 
   Future<void> getData(String city) async {
     setState(() => isLoadingWeather = true);
@@ -123,21 +127,18 @@ class _MyHomePageState extends State<MyHomePage> {
       return;
     }
 
-    final lat = coordinates["latitude"]!;
-    final lon = coordinates["longitude"]!;
-
-    final weather = await WeatherService().getWeather(lat, lon);
+    final weather = await WeatherService().getWeather(
+      coordinates["latitude"]!,
+      coordinates["longitude"]!,
+    );
 
     setState(() {
       isLoadingWeather = false;
-      if (weather != null) {
-        _currentWeather = weather;
-        _locationName = city;
-      }
+      _currentWeather = weather;
+      _locationName = city;
     });
   }
 
-  // ---------------- SUGGESTIONS ----------------
 
   Future<void> getSuggestions(String query) async {
     if (query.isEmpty) {
@@ -158,9 +159,7 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  // ---------------- WEATHER DESCRIPTION ----------------
 
-  // Fix: use num instead of int — Open-Meteo returns weathercode as num
   String getWeatherDescription(num code) {
     if (code == 0) return "☀️ Sunny";
     if (code <= 3) return "⛅ Cloudy";
@@ -168,129 +167,99 @@ class _MyHomePageState extends State<MyHomePage> {
     if (code <= 67) return "🌧️ Rainy";
     if (code <= 77) return "❄️ Snowy";
     if (code <= 82) return "🌦️ Showers";
-    if (code <= 99) return "⛈️ Thunderstorm";
-    return "🌡️ Unknown";
+    if (code <= 99) return "⛈️ Storm";
+    return "Unknown";
   }
 
-  // ---------------- NAVIGATION ----------------
 
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+    _pageController.animateToPage(index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut);
   }
 
   void _handlePageChange(int index) {
     setState(() => _selectedIndex = index);
   }
 
-  // ---------------- LOADING / EMPTY STATE ----------------
+  // ---------------- UI HELPERS ----------------
 
-  Widget _buildPlaceholder(String message) {
+  Widget _placeholder(String text) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.cloud_outlined, size: 64, color: Colors.grey),
-          const SizedBox(height: 12),
-          Text(message, style: const TextStyle(color: Colors.grey)),
-        ],
-      ),
+      child: Text(text, style: TextStyle(color: Colors.grey, fontSize: rf(16))),
     );
   }
 
-  // ---------------- LOCATION HEADER ----------------
-
-  Widget _buildLocationHeader() {
+  Widget _locationHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: rp(),
       child: Text(
-        "$_locationName, $_region, $_country",
-        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        "$_locationName",
+        style: TextStyle(fontSize: rf(18), fontWeight: FontWeight.bold),
       ),
     );
   }
 
-  // ---------------- NOW TAB ----------------
 
   Widget buildNowTab() {
-    if (isLoadingWeather) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (isLoadingWeather) return const Center(child: CircularProgressIndicator());
 
     if (_currentWeather == null || _currentWeather!["current_weather"] == null) {
-      return _buildPlaceholder("Search for a city to see the weather");
+      return _placeholder("Search for a city");
     }
 
     final current = _currentWeather!["current_weather"];
-    final temp = current["temperature"];
-    final wind = current["windspeed"];
-    final code = current["weathercode"];
 
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildLocationHeader(),
-          Text(
-            getWeatherDescription(code),
-            style: const TextStyle(fontSize: 22),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "$temp °C",
-            style: const TextStyle(fontSize: 64, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text("💨 Wind: $wind km/h", style: const TextStyle(fontSize: 16)),
-        ],
+      child: Padding(
+        padding: rp(),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _locationHeader(),
+            Text(getWeatherDescription(current["weathercode"]),
+                style: TextStyle(fontSize: rf(20))),
+            const SizedBox(height: 10),
+            Text("${current["temperature"]}°C",
+                style: TextStyle(fontSize: rf(60), fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            Text("💨 ${current["windspeed"]} km/h",
+                style: TextStyle(fontSize: rf(16))),
+          ],
+        ),
       ),
     );
   }
 
-  // ---------------- TODAY TAB ----------------
 
   Widget buildTodayTab() {
-    if (isLoadingWeather) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (isLoadingWeather) return const Center(child: CircularProgressIndicator());
 
     if (_currentWeather == null || _currentWeather!["hourly"] == null) {
-      return _buildPlaceholder("Search for a city to see today's forecast");
+      return _placeholder("No data");
     }
 
     final hourly = _currentWeather!["hourly"];
-    final List times = hourly["time"];
-    final List temps = hourly["temperature_2m"];
-    final List winds = hourly["windspeed_10m"];
-    final List codes = hourly["weathercode"];
 
-    // Show only the next 24 hours
-    final int count = times.length < 24 ? times.length : 24;
+    final times = hourly["time"];
+    final temps = hourly["temperature_2m"];
+    final winds = hourly["windspeed_10m"];
+    final codes = hourly["weathercode"];
 
     return Column(
       children: [
-        _buildLocationHeader(),
+        _locationHeader(),
         Expanded(
           child: ListView.builder(
-            itemCount: count,
-            itemBuilder: (context, index) {
-              final time = times[index].toString().split("T")[1];
-              final temp = temps[index];
-              final wind = winds[index];
-              final code = codes[index];
+            itemCount: 12,
+            itemBuilder: (_, i) {
+              final time = times[i].split("T")[1];
 
               return ListTile(
-                leading: SizedBox(
-                  width: 55,
-                  child: Text(time, style: const TextStyle(fontWeight: FontWeight.w500)),
-                ),
-                title: Text("$temp °C"),
-                subtitle: Text(getWeatherDescription(code)),
-                trailing: Text("💨 $wind km/h"),
+                title: Text(time),
+                subtitle: Text(getWeatherDescription(codes[i])),
+                trailing: Text("${temps[i]}°C | ${winds[i]}km/h"),
               );
             },
           ),
@@ -299,47 +268,35 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  // ---------------- WEEKLY TAB ----------------
+  // ---------------- WEEK ----------------
 
   Widget buildWeeklyTab() {
-    if (isLoadingWeather) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (isLoadingWeather) return const Center(child: CircularProgressIndicator());
 
-    if (_currentWeather == null ||
-        _currentWeather!["daily"] == null ||
-        _currentWeather!["daily"]["time"] == null) {
-      return _buildPlaceholder("Search for a city to see the weekly forecast");
+    if (_currentWeather == null || _currentWeather!["daily"] == null) {
+      return _placeholder("No weekly data");
     }
 
     final daily = _currentWeather!["daily"];
-    final List dates = daily["time"];
-    final List maxTemps = daily["temperature_2m_max"];
-    final List minTemps = daily["temperature_2m_min"];
-    final List codes = daily["weathercode"];
 
     return Column(
       children: [
-        _buildLocationHeader(),
+        _locationHeader(),
         Expanded(
           child: ListView.builder(
-            itemCount: dates.length,
-            itemBuilder: (context, index) {
-              final date = _getDayName(DateTime.parse(dates[index].toString()));
-
-              final min = minTemps[index];
-              final max = maxTemps[index];
-              final code = codes[index];
+            itemCount: daily["time"].length,
+            itemBuilder: (_, i) {
+              final day = _getDayName(DateTime.parse(daily["time"][i]));
 
               return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: ListTile(
-                  leading: Text(
-                    date,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  title: Text(day),
+                  subtitle: Text(
+                    "${daily["temperature_2m_min"][i]}°C - ${daily["temperature_2m_max"][i]}°C",
                   ),
-                  title: Text(getWeatherDescription(code)),
-                  subtitle: Text("Min: $min°C  |  Max: $max°C"),
+                  trailing: Text(
+                    getWeatherDescription(daily["weathercode"][i]),
+                  ),
                 ),
               );
             },
@@ -358,14 +315,13 @@ class _MyHomePageState extends State<MyHomePage> {
         title: TextField(
           controller: _cityController,
           onChanged: getSuggestions,
-          onSubmitted: (value) {
-            getData(value);
+          onSubmitted: (v) {
+            getData(v);
             setState(() => suggestions.clear());
           },
           decoration: const InputDecoration(
             hintText: "Search city...",
             border: InputBorder.none,
-            prefixIcon: Icon(Icons.search),
           ),
         ),
         actions: [
@@ -385,32 +341,25 @@ class _MyHomePageState extends State<MyHomePage> {
               height: 200,
               child: ListView.builder(
                 itemCount: suggestions.length,
-                itemBuilder: (context, index) {
-                  final city = suggestions[index];
-
+                itemBuilder: (_, i) {
+                  final c = suggestions[i];
                   return ListTile(
-                    leading: const Icon(Icons.location_on_outlined),
-                    title: Text(city["name"] ?? ""),
-                    subtitle: Text("${city["region"]}, ${city["country"]}"),
+                    title: Text(c["name"] ?? ""),
+                    subtitle: Text("${c["region"]}, ${c["country"]}"),
                     onTap: () {
-                      final selectedCity = city["name"] ?? "";
-
+                      final name = c["name"]!;
                       setState(() {
-                        _locationName = selectedCity;
-                        _region = city["region"] ?? "";
-                        _country = city["country"] ?? "";
+                        _locationName = name;
+                        _cityController.text = name;
                         suggestions.clear();
-                        _cityController.text = selectedCity;
                       });
-
-                      getData(selectedCity);
+                      getData(name);
                     },
                   );
                 },
               ),
             ),
 
-          // Fix: use Expanded + Builder so tabs rebuild when setState is called
           Expanded(
             child: PageView(
               controller: _pageController,
