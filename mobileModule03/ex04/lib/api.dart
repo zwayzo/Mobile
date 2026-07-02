@@ -74,7 +74,6 @@ Future<Map<String, String>?> getCityFromCoordinates(double lat, double lon) asyn
 
 }
 Future<List<Map<String, String>>> fetchSuggestions(String query) async {
-  // print("Fetching suggestions for query: $query");
 
   final url =
       'https://geocoding-api.open-meteo.com/v1/search?name=$query&count=5';
@@ -103,7 +102,6 @@ Future<List<Map<String, String>>> fetchSuggestions(String query) async {
       }
     }
   
-    // print("suggestions: $suggestions");
 
     return suggestions;
   } catch (e) {
